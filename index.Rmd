@@ -7,7 +7,11 @@ author:
 	- Mohan Raj
 	- VV Robin
 date: "Last compiled on `r format(Sys.time(), '%d %B, %Y')`"
+<<<<<<< HEAD
 site: bookdown::bookdown_site
+=======
+site: "bookdown::bookdown_site"
+>>>>>>> 2a8707ff9756c29b9980a50b6c0378452faffc67
 output: 
    bookdown::gitbook:
 documentclass: book
