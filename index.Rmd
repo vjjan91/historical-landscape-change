@@ -1,0 +1,21 @@
+---
+title: "Quantifying a century of landscape changes across the Nilgiri hills of the Western Ghats (1848-2017)"
+author:
+	- Vijay Ramesh
+	- Amrutha Rajan
+	- Ian Lockwood
+	- Mohan Raj
+	- VV Robin
+date: "Last compiled on `r format(Sys.time(), '%d %B, %Y')`"
+site: bookdown::bookdown_site
+output: 
+   bookdown::gitbook:
+documentclass: book
+bibliography: ["references.bib", "packages.bib"]
+csl: ecography.csl 
+citation_package: biblatex
+link-citations: yes
+fontsize: 12pt
+---
+
+
