@@ -6,7 +6,7 @@ bibliography: references.bib
 
 ## Processing land cover data
 
-In this script, we will process land cover polygons and rasters for multiple time periods (1848 and 2018) across the Nilgiri hills of the Western Ghats biodiversity hotspot. For the year 1848, a survey map (created by Captain John Ouchterlony) was obtained from the British Library and the Tamil Nadu State Archive and was manually digitized to arrive at multiple land cover classes (for more information on the process of digitization, please read the accompanying manuscript and use the README section in the GitHub repository). For the year 2018, we relied on satellite imagery from Sentinel-2 (the imagery was classified using Google Earth Engine and more information on the classification can be obtained from the accompanying manuscript).
+In this script, we will process land cover polygons and rasters for multiple time periods (1848 and 2018) across the Nilgiri hills of the Western Ghats biodiversity hotspot. For the year 1848, a survey map (created by Captain John Ouchterlony) was obtained from the British Library and the Tamil Nadu State Archive and was manually digitized to arrive at multiple land cover classes (for more information on the process of digitization, please read the accompanying manuscript and use the README section in the GitHub repository). For the year 2018, we relied on satellite imagery from Sentinel-2 (the imagery was classified using Google Earth Engine and more information on the classification can be obtained below).
 
 ### Load necessary libraries
 
@@ -125,7 +125,7 @@ all1848 <- st_buffer(st_union(nil1848), dist = 0)
 
 ### Rasterization of the 1848 shapefiles
 
-The 1848 digitized shapefiles are rasterized for comparison with the 2017 sentinel satellite imagery.
+The 1848 digitized shapefiles are rasterized for comparison with the 2018 sentinel satellite imagery.
 ```{r}
 # nil11848 raster
 # scale: 1000ft to 1 inch (1:12000; 6 metres resolution)
@@ -183,9 +183,126 @@ landcover_class <- data.frame(ID = 1:7,
                                            "water_bodies"))
 levels(rast2018) <- landcover_class
 
+colors2018 <- c(
+  '#be4fc4', # agriculture, violetish
+  '#04a310', # shola forests, lighter green
+  '#cbb315', # shola grasslands, yellowish
+  '#c17111', # timber plantations, brownish
+  '#b0a69d', # settlements, grayish
+  '#025a05', # tea plantations, dark greenish
+  '#2035df'  # waterbodies, royal blue
+)
+
+## side-by-side visualization
+
+colors1848 <- c(
+  '#be4fc4', # agriculture, violetish
+  '#c17111', # plantations, brownish
+  '#b0a69d', # settlements, grayish
+  '#04a310', # shola forests, lighter green
+  '#cbb315', # shola grasslands, yellowish
+  '#2035df'  # waterbodies, royal blue
+)
+
+## saving a high resolution visualization
+png(filename = "figs/fig_landCover_1848_vs_2018.png", 
+    width = 12, height = 7, units = "in", res = 300)
+
+par(mfrow = c(1,2))
+plot(rast1848, col = colors1848, main = "1848",
+     legend = FALSE)
+plot(rast2018, col=colors2018, main = "2018", 
+     legend=FALSE)
+
+# add custom legend
+par(mar = c(0, 0, 0, 0), 
+     new = TRUE)
+plot(0, 0, type = 'l', bty = 'n', xaxt = 'n', yaxt = 'n')
+legend("bottom",
+       legend=landcover_class$name, fill=colors2018, 
+       cex = 0.8, 
+       title="land cover classes",
+       ncol = 2)
+dev.off()
+```
+
+## Subsume plantations into one category for 2018
+
+Since 1848 had very few to no tea plantations and only timber plantations were present at the time, we reclassify timber plantations into the plantations category for the 2018 raster to ease comparisons. 
+```{r}
+# read reclassification matrix
+reclassification_matrix <- read.csv("data/spatial/2018-nilgiris/reclassification-matrix.csv")
+reclassification_matrix <- as.matrix(reclassification_matrix[, c("V1", "To")])
+
+# reclassification
+rast2018_reclassified <- terra::classify(
+  x = rast2018,
+  rcl = reclassification_matrix
+)
+
+## create a dataframe with names of classes and their corresponding values
+landcover_reclass <- data.frame(ID = 1:6,
+                              name = c("agriculture",
+                                           "shola_forest",
+                                           "shola_grassland",
+                                           "plantations",
+                                           "settlements",
+                                           "water_bodies"))
+
+levels(rast2018_reclassified) <- landcover_reclass
+
+## side-by-side visualization
+colors2018reclass <- c(
+  '#be4fc4', # agriculture, violetish
+  '#04a310', # shola forests, lighter green
+  '#cbb315', # shola grasslands, yellowish
+  '#c17111', # plantations, brownish
+  '#b0a69d', # settlements, grayish
+  '#2035df'  # waterbodies, royal blue
+)
+
+png(filename = "figs/fig_landCover_1848_vs_2018reclassified.png", 
+    width = 12, height = 7, units = "in", res = 300)
+
+par(mfrow = c(1,2))
+plot(rast1848, col = colors1848, main = "1848",
+     legend = FALSE)
+plot(rast2018_reclassified, col=colors2018reclass, main = "2018", 
+     legend=FALSE)
+
+# add custom legend
+par(mar = c(0, 0, 0, 0), 
+     new = TRUE)
+plot(0, 0, type = 'l', bty = 'n', xaxt = 'n', yaxt = 'n')
+legend("bottom",
+       legend=landcover_reclass$name, fill=colors2018reclass, 
+       cex = 0.8, 
+       title="land cover classes",
+       ncol = 2)
+dev.off()
+```
+
+### Write the shapefiles and rasters to file  
+
+Please note that the processed rasters above have been resampled to a resolution of 10 metres.  
+```{r}
+# vectors
+st_write(nil1848, "results/processed-shapefiles/1848.shp", 
+         driver = "ESRI Shapefile")
+
+# rasters
+terra::writeRaster(rast1848, "results/processed-rasters/1848.tif")
+terra::writeRaster(rast2018, "results/processed-rasters/2018.tif")
+terra::writeRaster(rast2018_reclassified, "results/processed-rasters/2018reclassified.tif")
+```
+
+
+### Area-wise comparisons of land cover change
+
+```{r}
 # area-wise calculations for the 2018 raster (the below objects will be used to compare overall areas, alongside the 1848 map)
-sz2018 <- cellSize(rast2018, unit = "m")
-area2018 <- zonal(sz2018, rast2018, sum)
+sz2018 <- cellSize(rast2018_reclassified, unit = "m")
+area2018 <- zonal(sz2018, rast2018_reclassified, sum)
 area2018SqKm <- (area2018$area / 1000000)
 area2018 <- cbind(area2018, area2018SqKm)
 
@@ -196,93 +313,24 @@ area1848SqKm <- (area1848$area / 1000000)
 area1848 <- cbind(area1848, area1848SqKm)
 ```
 
-### Write the shapefiles and rasters to file  
 
-Please note that the processed rasters above have been resampled to a resolution of 12 metres.  
-```{r}
-# vectors
-st_write(nil1848, "results/processed-shapefiles/1848.shp", 
-         driver = "ESRI Shapefile")
+### Barplots of land cover change
 
-# rasters
-terra::writeRaster(rast1848, "results/processed-rasters/1848.tif")
-terra::writeRaster(rast2018, "results/processed-rasters/2018.tif")
-```
-
-
-## Ignore below content at the moment
-
-
-## Cleaning up the attributes for visualization
-
-```{r}
-## Note, since there was no distinction made between tea and timber plantations for the 1848 map, we will subsume these two classes under a single class - plantations (for the sake of calculating areas)
-
-areaRast1973 <- areaRast1973 %>%
-  mutate(class = case_when(
-    class == "Agricultural Land" ~ "agriculture",
-    class == "Settlements" ~ "settlements",
-    class == "Shola Forest" ~ "shola_forest",
-    class == "Shola Grassland" ~ "shola_grassland",
-    class == "Tea Plantations" ~ "plantations",
-    class == "Timber Plantations" ~ "plantations",
-    class == "Water bodies" ~ "water_bodies"))
-
-areaNil1973 <- areaRast1973 %>% 
-  group_by(class) %>% 
-  summarise(areaInMeters = sum(areaInMeters),
-         sumArea = sum(sumArea)) %>% ungroup()
-
-areaRast1995 <- areaRast1995 %>%
-  mutate(class = case_when(
-    class == "Agricultural Land" ~ "agriculture",
-    class == "Settlements" ~ "settlements",
-    class == "Shola Forest" ~ "shola_forest",
-    class == "Shola Grassland" ~ "shola_grassland",
-    class == "Tea Plantations" ~ "plantations",
-    class == "Timber Plantations" ~ "plantations",
-    class == "Water bodies" ~ "water_bodies"))
-
-areaNil1995 <- areaRast1995 %>% 
-  group_by(class) %>% 
-  summarise(areaInMeters = sum(areaInMeters),
-         sumArea = sum(sumArea)) %>% ungroup()
-
-areaRast2017 <- areaRast2017 %>%
-  mutate(class = case_when(
-    class == "Agricultural Land" ~ "agriculture",
-    class == "Settlements" ~ "settlements",
-    class == "Shola Forest" ~ "shola_forest",
-    class == "Shola Grassland" ~ "shola_grassland",
-    class == "Tea Plantations" ~ "plantations",
-    class == "Timber Plantations" ~ "plantations",
-    class == "Water bodies" ~ "water_bodies"))
-
-areaNil2017 <- areaRast2017 %>% 
-  group_by(class) %>% 
-  summarise(areaInMeters = sum(areaInMeters),
-         sumArea = sum(sumArea)) %>% ungroup()
-```
-
-### Calculating areas of different land cover classes across time periods using rasters
-
-Making plots of the overall area of land cover types
 
 ```{r}
 # Joining all dataframes to create a single one for plotting and visualization
-names(areaNil1848) <- c("class", "areaInMeters","sumArea")
+names(area1848) <- c("class", "areaInMeters","sumArea")
+names(area2018) <- c("class", "areaInMeters","sumArea")
 
 areaCalc <- purrr::reduce(list(
-  areaNil1848, 
-  areaNil1973, 
-  areaNil1995, 
-  areaNil2017
+  area1848, 
+  area2018
 ), dplyr::full_join, by = "class")
 
-names(areaCalc) <- c("class", "areaMt1848", "1848", "areaMt1973", "1973", "areaMt1995", "1995", "areaMt2017", "2017")
+names(areaCalc) <- c("class", "areaMt1848", "1848", "areaMt2018", "2018")
 
 areaCalc <- areaCalc %>%
-  select("class", "1848", "1973", "1995", "2017") %>%
+  select("class", "1848", "2018") %>%
   pivot_longer(!class, names_to = "Year", values_to = "Area")
 
 write.csv(areaCalc, "results/totalArea-by-landCover-timePeriod.csv", row.names = F)
@@ -317,11 +365,7 @@ fig_area <- ggplot(areaCalc, aes(x = class,
 ggsave(fig_area,
   filename = "figs/fig_totalArea_landCover.png", width = 15, height = 13, device = png(), units = "in", dpi = 600)
 dev.off()
-```
 
-### Create a figure of proportion of landcover across areas over time
-
-```{r}
 # get percentArea occupied by each land cover class
 percentArea <- areaCalc %>%
   group_by(Year) %>%
